@@ -11,7 +11,7 @@ Use este roteiro na véspera ou no bloco de deploy do dia 1.
 
 Repo já publicado:
 
-**https://github.com/thaelenlima/encomp-agenda**
+**https://github.com/thaemorais/encomp-agenda**
 
 Para atualizar depois de mudanças locais:
 

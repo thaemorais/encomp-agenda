@@ -1,203 +1,150 @@
-// Troque pela URL do Render depois do deploy do dia 1.
-const API_BASE = "http://localhost:3000";
+const API_BASE = 'http://localhost:3000'; // troque pela URL do Render
 
-const form = document.getElementById("form-evento");
-const campoId = document.getElementById("evento-id");
-const campoTitulo = document.getElementById("titulo");
-const campoData = document.getElementById("data");
-const campoLocal = document.getElementById("local");
-const campoStatus = document.getElementById("status");
-const campoDescricao = document.getElementById("descricao");
-const btnSalvar = document.getElementById("btn-salvar");
-const btnCancelar = document.getElementById("btn-cancelar");
-const btnAtualizar = document.getElementById("btn-atualizar");
-const formTitulo = document.getElementById("form-titulo");
-const lista = document.getElementById("lista-eventos");
-const listaEstado = document.getElementById("lista-estado");
-const mensagem = document.getElementById("mensagem");
+const form = document.getElementById('form');
+const lista = document.getElementById('lista');
+const msg = document.getElementById('msg');
 
+// Texto amigável de cada status na listagem (a API guarda a chave em inglês/snake_case)
 const STATUS_LABEL = {
-  agendado: "Agendado",
-  em_andamento: "Em andamento",
-  concluido: "Concluído",
-  cancelado: "Cancelado",
+  agendado: 'Agendado',
+  em_andamento: 'Em andamento',
+  concluido: 'Concluído',
+  cancelado: 'Cancelado',
 };
 
-function mostrarMensagem(texto, tipo) {
-  mensagem.hidden = false;
-  mensagem.textContent = texto;
-  mensagem.className = `mensagem ${tipo}`;
+/**
+ * O que: formata a data para exibição no padrão brasileiro.
+ * Como: separa "YYYY-MM-DD" em ano, mês e dia e remonta como "DD/MM/YYYY".
+ * Por quê: a API e o input type="date" usam ISO; na tela fica mais legível para o aluno/usuário.
+ */
+function formatarData(data) {
+  const [ano, mes, dia] = data.split('-');
+  return `${dia}/${mes}/${ano}`;
 }
 
-function limparMensagem() {
-  mensagem.hidden = true;
-  mensagem.textContent = "";
-  mensagem.className = "mensagem";
+/**
+ * O que: valida se a string de data é uma data de calendário válida.
+ * Como: exige 3 partes (ano-mês-dia), converte para número, checa faixas e
+ *        confirma com Date se o dia existe de verdade (ex.: 31/02 falha).
+ * Por quê: evita enviar lixo para a API e ensina validação no front antes do fetch.
+ */
+function dataValida(data) {
+  const partes = data.split('-');
+  if (partes.length !== 3) return false;
+
+  const ano = Number(partes[0]);
+  const mes = Number(partes[1]);
+  const dia = Number(partes[2]);
+
+  if (!ano || !mes || !dia) return false;
+  if (mes < 1 || mes > 12) return false;
+  if (dia < 1 || dia > 31) return false;
+  if (ano < 1950 || ano > 2050) return false;
+
+  // confere se a data existe de verdade (ex.: 31/02 é inválido)
+  const d = new Date(ano, mes - 1, dia);
+  return (
+    d.getFullYear() === ano && d.getMonth() === mes - 1 && d.getDate() === dia
+  );
 }
 
-function modoCriacao() {
-  campoId.value = "";
-  form.reset();
-  campoStatus.value = "agendado";
-  formTitulo.textContent = "Novo evento";
-  btnSalvar.textContent = "Salvar";
-  btnCancelar.hidden = true;
-}
+/**
+ * O que: busca os eventos na API e desenha a lista na página.
+ * Como: faz GET /eventos, limpa a ul, cria um li por evento (com bolinha, editar e excluir).
+ * Por quê: é o ponto único que atualiza a tela depois de carregar, salvar ou apagar.
+ */
+async function carregar() {
+  const res = await fetch(`${API_BASE}/eventos`);
+  const eventos = await res.json();
 
-function modoEdicao(evento) {
-  campoId.value = evento.id;
-  campoTitulo.value = evento.titulo;
-  campoData.value = evento.data;
-  campoLocal.value = evento.local;
-  campoStatus.value = evento.status || "agendado";
-  campoDescricao.value = evento.descricao || "";
-  formTitulo.textContent = "Editar evento";
-  btnSalvar.textContent = "Atualizar";
-  btnCancelar.hidden = false;
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-function lerFormulario() {
-  return {
-    titulo: campoTitulo.value.trim(),
-    data: campoData.value,
-    local: campoLocal.value.trim(),
-    status: campoStatus.value,
-    descricao: campoDescricao.value.trim(),
-  };
-}
-
-async function api(caminho, opcoes = {}) {
-  const resposta = await fetch(`${API_BASE}${caminho}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(opcoes.headers || {}),
-    },
-    ...opcoes,
-  });
-
-  if (resposta.status === 204) {
-    return null;
-  }
-
-  const dados = await resposta.json().catch(() => ({}));
-
-  if (!resposta.ok) {
-    throw new Error(dados.erro || `Erro HTTP ${resposta.status}`);
-  }
-
-  return dados;
-}
-
-function renderLista(eventos) {
-  lista.innerHTML = "";
+  lista.innerHTML = '';
 
   if (!eventos.length) {
-    listaEstado.hidden = false;
-    listaEstado.textContent = "Nenhum evento cadastrado.";
+    lista.innerHTML = '<li>Nenhum evento ainda.</li>';
     return;
   }
 
-  listaEstado.hidden = true;
-
-  for (const evento of eventos) {
-    const li = document.createElement("li");
-    li.className = "item";
-
-    const status = evento.status || "agendado";
-    const desc = evento.descricao
-      ? `<p class="descricao">${evento.descricao}</p>`
-      : "";
-
+  for (const e of eventos) {
+    const li = document.createElement('li');
     li.innerHTML = `
-      <div class="item-topo">
-        <h3>${evento.titulo}</h3>
-        <span class="badge ${status}">${STATUS_LABEL[status] || status}</span>
-      </div>
-      <p class="meta">${evento.data} · ${evento.local}</p>
-      ${desc}
-      <div class="acoes-item">
-        <button type="button" class="secundario" data-acao="editar">Editar</button>
-        <button type="button" class="perigo" data-acao="excluir">Excluir</button>
-      </div>
+      <strong>${e.titulo}</strong>
+      <p>
+        ${formatarData(e.data)} - ${e.local} -
+        <span class="bolinha ${e.status}"></span> ${STATUS_LABEL[e.status] || e.status}
+      </p>
+      <button type="button" class="editar">Editar</button>
+      <button type="button" class="excluir">Excluir</button>
     `;
 
-    li.querySelector('[data-acao="editar"]').addEventListener("click", () => {
-      modoEdicao(evento);
-    });
+    /**
+     * O que: coloca o evento escolhido no formulário para edição.
+     * Como: copia id, título, data, local e status para os campos do form.
+     * Por quê: o submit usa o id escondido para decidir entre POST (novo) e PUT (editar).
+     */
+    li.querySelector('.editar').onclick = () => {
+      form.eventoId.value = e.id;
+      form.titulo.value = e.titulo;
+      form.data.value = e.data;
+      form.local.value = e.local;
+      form.status.value = e.status;
+    };
 
-    li.querySelector('[data-acao="excluir"]').addEventListener("click", async () => {
-      if (!confirm(`Excluir "${evento.titulo}"?`)) return;
-
-      try {
-        await api(`/eventos/${evento.id}`, { method: "DELETE" });
-        mostrarMensagem("Evento excluído.", "ok");
-        if (campoId.value === evento.id) modoCriacao();
-        await carregarEventos();
-      } catch (erro) {
-        mostrarMensagem(erro.message, "erro");
-      }
-    });
+    /**
+     * O que: remove o evento na API e atualiza a lista.
+     * Como: pede confirmação, chama DELETE /eventos/:id e depois carregar().
+     * Por quê: o usuário precisa conseguir apagar sem recarregar a página manualmente.
+     */
+    li.querySelector('.excluir').onclick = async () => {
+      if (!confirm('Excluir este evento?')) return;
+      await fetch(`${API_BASE}/eventos/${e.id}`, { method: 'DELETE' });
+      carregar();
+    };
 
     lista.appendChild(li);
   }
 }
 
-async function carregarEventos() {
-  listaEstado.hidden = false;
-  listaEstado.textContent = "Carregando...";
-  lista.innerHTML = "";
+/**
+ * O que: trata o envio do formulário (criar ou atualizar evento).
+ * Como: impede reload da página, valida a data, monta o JSON e chama POST ou PUT.
+ * Por quê: é a ponte entre o formulário HTML e a API; sem preventDefault a página recarregaria.
+ */
+form.onsubmit = async (ev) => {
+  ev.preventDefault();
+  msg.textContent = '';
 
-  try {
-    const eventos = await api("/eventos");
-    renderLista(eventos);
-  } catch (erro) {
-    listaEstado.hidden = false;
-    listaEstado.textContent = "Não foi possível carregar os eventos.";
-    mostrarMensagem(erro.message, "erro");
+  const corpo = {
+    titulo: form.titulo.value,
+    data: form.data.value,
+    local: form.local.value,
+    status: form.status.value,
+  };
+
+  if (!dataValida(corpo.data)) {
+    msg.textContent = 'Data inválida';
+    return;
   }
-}
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  limparMensagem();
+  const id = form.eventoId.value;
+  const url = id ? `${API_BASE}/eventos/${id}` : `${API_BASE}/eventos`;
+  const method = id ? 'PUT' : 'POST';
 
-  const corpo = lerFormulario();
-  const id = campoId.value;
-  btnSalvar.disabled = true;
+  const res = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(corpo),
+  });
 
-  try {
-    if (id) {
-      await api(`/eventos/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(corpo),
-      });
-      mostrarMensagem("Evento atualizado.", "ok");
-    } else {
-      await api("/eventos", {
-        method: "POST",
-        body: JSON.stringify(corpo),
-      });
-      mostrarMensagem("Evento criado.", "ok");
-    }
-
-    modoCriacao();
-    await carregarEventos();
-  } catch (erro) {
-    mostrarMensagem(erro.message, "erro");
-  } finally {
-    btnSalvar.disabled = false;
+  if (!res.ok) {
+    const dados = await res.json();
+    msg.textContent = dados.erro || 'Erro ao salvar';
+    return;
   }
-});
 
-btnCancelar.addEventListener("click", () => {
-  modoCriacao();
-  limparMensagem();
-});
+  form.reset();
+  form.eventoId.value = '';
+  carregar();
+};
 
-btnAtualizar.addEventListener("click", () => {
-  limparMensagem();
-  carregarEventos();
-});
-
-carregarEventos();
+// Ao abrir a página, já busca e mostra os eventos
+carregar();

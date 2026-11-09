@@ -44,6 +44,7 @@ Abra a URL do `serve` e use a API em `http://localhost:3000`.
 | [backend/README.md](backend/README.md) | Como rodar e publicar a API |
 | [frontend/README.md](frontend/README.md) | Como rodar o front |
 | [docs/05-checklist-deploy.md](docs/05-checklist-deploy.md) | Checklist GitHub + Render |
+| [docs/aulas/](docs/aulas/) | Slides (PDF/MD) e roteiro das aulas |
 
 ## Deploy
 

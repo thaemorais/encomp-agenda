@@ -2,103 +2,107 @@ const express = require("express");
 const db = require("../db");
 
 const router = express.Router();
-const STATUS_VALIDOS = ["agendado", "em_andamento", "concluido", "cancelado"];
 
-function validarBody(body) {
-  const titulo = typeof body.titulo === "string" ? body.titulo.trim() : "";
-  const data = typeof body.data === "string" ? body.data.trim() : "";
-  const local = typeof body.local === "string" ? body.local.trim() : "";
+/**
+ * O que: verifica se já existe evento com o mesmo título E a mesma data.
+ * Como: SELECT por titulo + data; no PUT ignora o próprio id.
+ * Por quê: permite o mesmo título em dias diferentes, mas não dois iguais no mesmo dia.
+ */
+function eventoDuplicado(titulo, data, idAtual) {
+  const row = db
+    .prepare("SELECT id FROM eventos WHERE titulo = ? AND data = ?")
+    .get(titulo, data);
 
-  if (!titulo || !data || !local) {
-    return { erro: "titulo, data e local são obrigatórios" };
-  }
-
-  const status =
-    typeof body.status === "string" && body.status.trim()
-      ? body.status.trim()
-      : "agendado";
-
-  if (!STATUS_VALIDOS.includes(status)) {
-    return {
-      erro: `status inválido. Use: ${STATUS_VALIDOS.join(", ")}`,
-    };
-  }
-
-  const descricao =
-    typeof body.descricao === "string" ? body.descricao.trim() : "";
-
-  return {
-    dados: { titulo, data, local, status, descricao },
-  };
+  if (!row) return false;
+  if (idAtual && row.id === idAtual) return false;
+  return true;
 }
 
+/**
+ * O que: lista todos os eventos.
+ * Como: SELECT * ordenado por data; devolve o array em JSON.
+ * Por quê: o frontend precisa de um GET para montar a tela inicial e após cada alteração.
+ */
 router.get("/", (req, res) => {
-  const eventos = db
-    .prepare("SELECT id, titulo, data, local, status, descricao FROM eventos ORDER BY data, titulo")
-    .all();
+  const eventos = db.prepare("SELECT * FROM eventos ORDER BY data").all();
   res.json(eventos);
 });
 
-router.get("/:id", (req, res) => {
-  const evento = db
-    .prepare("SELECT id, titulo, data, local, status, descricao FROM eventos WHERE id = ?")
-    .get(req.params.id);
+/**
+ * O que: cria um novo evento.
+ * Como: lê o body, valida campos e duplicidade título+data, gera id, INSERT e responde 201.
+ * Por quê: é o C do CRUD; status padrão "agendado" evita exigir o campo sempre.
+ */
+router.post("/", (req, res) => {
+  const { titulo, data, local, status } = req.body || {};
 
-  if (!evento) {
-    return res.status(404).json({ erro: "Evento não encontrado" });
+  if (!titulo || !data || !local) {
+    return res.status(400).json({ erro: "titulo, data e local são obrigatórios" });
   }
 
-  res.json(evento);
-});
-
-router.post("/", (req, res) => {
-  const resultado = validarBody(req.body || {});
-  if (resultado.erro) {
-    return res.status(400).json({ erro: resultado.erro });
+  if (eventoDuplicado(titulo, data)) {
+    return res
+      .status(400)
+      .json({ erro: "já existe um evento com este título nesta data" });
   }
 
   const novo = {
     id: String(Date.now()),
-    ...resultado.dados,
+    titulo,
+    data,
+    local,
+    status: status || "agendado",
   };
 
-  db.prepare(`
-    INSERT INTO eventos (id, titulo, data, local, status, descricao)
-    VALUES (@id, @titulo, @data, @local, @status, @descricao)
-  `).run(novo);
+  db.prepare(
+    "INSERT INTO eventos (id, titulo, data, local, status) VALUES (@id, @titulo, @data, @local, @status)",
+  ).run(novo);
 
   res.status(201).json(novo);
 });
 
+/**
+ * O que: atualiza um evento existente pelo id da URL.
+ * Como: valida body e duplicidade título+data, roda UPDATE; se changes === 0, responde 404.
+ * Por quê: é o U do CRUD; o front manda PUT quando o formulário já tem eventoId.
+ */
 router.put("/:id", (req, res) => {
-  const existente = db
-    .prepare("SELECT id FROM eventos WHERE id = ?")
-    .get(req.params.id);
+  const { titulo, data, local, status } = req.body || {};
 
-  if (!existente) {
+  if (!titulo || !data || !local) {
+    return res.status(400).json({ erro: "titulo, data e local são obrigatórios" });
+  }
+
+  if (eventoDuplicado(titulo, data, req.params.id)) {
+    return res
+      .status(400)
+      .json({ erro: "já existe um evento com este título nesta data" });
+  }
+
+  const info = db
+    .prepare(
+      "UPDATE eventos SET titulo = ?, data = ?, local = ?, status = ? WHERE id = ?",
+    )
+    .run(titulo, data, local, status || "agendado", req.params.id);
+
+  if (info.changes === 0) {
     return res.status(404).json({ erro: "Evento não encontrado" });
   }
 
-  const resultado = validarBody(req.body || {});
-  if (resultado.erro) {
-    return res.status(400).json({ erro: resultado.erro });
-  }
-
-  const atualizado = {
-    id: existente.id,
-    ...resultado.dados,
-  };
-
-  db.prepare(`
-    UPDATE eventos
-    SET titulo = @titulo, data = @data, local = @local,
-        status = @status, descricao = @descricao
-    WHERE id = @id
-  `).run(atualizado);
-
-  res.json(atualizado);
+  res.json({
+    id: req.params.id,
+    titulo,
+    data,
+    local,
+    status: status || "agendado",
+  });
 });
 
+/**
+ * O que: remove um evento pelo id.
+ * Como: DELETE WHERE id; se nada foi apagado, 404; senão 204 sem body.
+ * Por quê: é o D do CRUD; 204 significa sucesso sem conteúdo para devolver.
+ */
 router.delete("/:id", (req, res) => {
   const info = db.prepare("DELETE FROM eventos WHERE id = ?").run(req.params.id);
 

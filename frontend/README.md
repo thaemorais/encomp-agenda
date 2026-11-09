@@ -1,31 +1,15 @@
 # Frontend — ENCOMP Agenda
 
-HTML + CSS + JS vanilla consumindo a API de eventos.
+Três arquivos enxutos: `index.html`, `css/styles.css`, `js/app.js`.
 
-## Rodar local
+## Rodar
 
-1. Suba o backend em `http://localhost:3000`.
-2. Em `js/app.js`, confira `API_BASE` (local ou URL do Render).
-3. Abra o front com um servidor estático (evite `file://` por CORS):
+1. Backend em `http://localhost:3000` (ou URL do Render em `API_BASE`)
+2. Servir a pasta (não use `file://`):
 
 ```bash
 cd frontend
 npx --yes serve .
 ```
 
-Ou use a extensão Live Server no VS Code.
-
-## Depois do deploy da API
-
-Troque em `js/app.js`:
-
-```js
-const API_BASE = "https://SEU-SERVICO.onrender.com";
-```
-
-## Funcionalidades
-
-- Listar eventos
-- Criar / editar / excluir
-- Estados de loading, erro e lista vazia
-- Confirmação antes de excluir
+Ou Live Server no VS Code.

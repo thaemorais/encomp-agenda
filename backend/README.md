@@ -1,6 +1,24 @@
 # Backend — ENCOMP Agenda API
 
-API REST de eventos (Node.js + Express + SQLite).
+Arquitetura enxuta (3 arquivos de código):
+
+```text
+backend/
+  index.js           # sobe o servidor, middlewares, /health
+  db.js              # conexão SQLite + tabela + seed
+  routes/eventos.js  # CRUD de /eventos
+  data/agenda.db     # gerado em runtime (não versionar)
+```
+
+## Por que separar?
+
+| Arquivo | Responsabilidade |
+|---------|------------------|
+| `index.js` | entrada da aplicação |
+| `db.js` | persistência |
+| `routes/eventos.js` | regras HTTP do recurso |
+
+Mesma ideia de projetos maiores, sem excesso de pastas.
 
 ## Rodar local
 
@@ -18,30 +36,12 @@ API em `http://localhost:3000`.
 |--------|---------|-----------|
 | GET | `/health` | Health check |
 | GET | `/eventos` | Listar |
-| GET | `/eventos/:id` | Buscar por id |
 | POST | `/eventos` | Criar |
 | PUT | `/eventos/:id` | Atualizar |
 | DELETE | `/eventos/:id` | Remover |
 
-Detalhes do contrato: [docs/04-modelo-api.md](../docs/04-modelo-api.md).
+Body: `titulo`, `data`, `local` (obrigatórios) e `status` (opcional).
 
 ## Deploy no Render
 
-Checklist passo a passo: [docs/05-checklist-deploy.md](../docs/05-checklist-deploy.md).
-
-Resumo rápido:
-
-1. Repositório no GitHub
-2. New → Web Service → Root Directory: `backend`
-3. Build: `npm install` · Start: `npm start`
-4. Copie a URL pública
-
-URL base (preencher após o deploy):
-
-```
-https://SEU-SERVICO.onrender.com
-```
-
-Persistência: SQLite em `data/agenda.db` (criado automaticamente; não versionar o `.db`).
-
-No plano gratuito do Render o disco é efêmero: o banco pode resetar após sleep/redeploy (o seed roda de novo). Para a aula isso é aceitável.
+Root Directory: `backend` · Build: `npm install` · Start: `npm start`
